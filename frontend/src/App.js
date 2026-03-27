@@ -3,7 +3,7 @@ import axios from 'axios';
 import { 
   ChartLine, Wallet, CurrencyBtc, ArrowUp, ArrowDown, 
   SignOut, User, CreditCard, TrendUp, TrendDown,
-  Lightning, Activity, Gear, CaretDown, Eye, EyeSlash
+  Lightning, Gear, CaretDown, Eye, EyeSlash
 } from '@phosphor-icons/react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -486,7 +486,7 @@ function IndicatorsPanel({ analysis }) {
     <div className="card p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-heading font-bold">Technical Analysis</h3>
-        <Activity size={20} className="text-primary" />
+        <TrendUp size={20} className="text-primary" />
       </div>
 
       <div className={`text-center p-3 rounded mb-4 ${
