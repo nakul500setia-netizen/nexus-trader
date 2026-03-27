@@ -1,0 +1,89 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 2: Performance Pro",
+  "rationale": "For a crypto trading dashboard, users require high visibility, command-center focus, and elite precision. Dark theme prevents eye strain during long sessions, while high-contrast accents enable quick decision-making.",
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#121212",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "primary": "#007AFF",
+    "primary_hover": "#3395FF",
+    "positive": "#00E676",
+    "negative": "#FF3B30",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "rgba(255, 255, 255, 0.6)"
+  },
+  "typography": {
+    "headings": "Manrope",
+    "body": "JetBrains Mono",
+    "data_numbers": "JetBrains Mono",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em]"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "p-4, p-6, p-8",
+    "grid_mode": "MODE B: THE CONTROL ROOM GRID",
+    "grid_classes": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4",
+    "surfaces": "Tactical Minimalism. Flat solid backgrounds, 1px solid border (border-white/10), no soft shadows. Sharp edges or max 4px border radius. No glassmorphism."
+  },
+  "components": {
+    "cards": "Flat background, 1px solid border, no shadow. Hover: slight border color brighten. Use 'border-collapse' style grid where possible.",
+    "buttons": "High-saturation accent blocks. No rounded pills, use rounded-md or sharp corners.",
+    "charts": "Use Recharts or Shadcn chart components. Use high-contrast stroke colors against the dark background. No generic gradients.",
+    "tables": "Dense. Use JetBrains mono for numerical columns. Right-align numbers.",
+    "navigation": "Side or top nav. Solid background with hard bottom/right border."
+  },
+  "motion": {
+    "hover": "Explicitly set hover text color. Hover state color must be a lighter hue.",
+    "transitions": "transition-colors duration-200 ease-in-out"
+  },
+  "media": {
+    "image_urls": [
+      {
+        "category": "logo",
+        "url": "https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwxfHxjb21wYW55JTIwbG9nb3xlbnwwfHx8fDE3NzQ1ODM1ODN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract minimalist logo for Nexus Trader"
+      },
+      {
+        "category": "login_background",
+        "url": "https://images.unsplash.com/photo-1649355403641-c32a19871d7e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxnbG93aW5nJTIwbmVvbiUyMGJsdWUlMjBnZW9tZXRyeXxlbnwwfHx8fDE3NzQ1ODM1OTB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Dark tech geometric background for auth screens"
+      },
+      {
+        "category": "dashboard_header_bg",
+        "url": "https://images.pexels.com/photos/6727766/pexels-photo-6727766.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Abstract neon blue geometry for AI agent visual representation"
+      },
+      {
+         "category": "trading_illustration",
+         "url": "https://images.pexels.com/photos/7567231/pexels-photo-7567231.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+         "description": "Trading chart contextual image for onboarding or empty states"
+      }
+    ]
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "instructions": "Use Phosphor Icons for dense dashboard and developer tools look."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text meets minimum 4.5:1 ratio against background.",
+    "testing": "All interactive elements MUST include data-testid attribute in kebab-case."
+  },
+  "instructions_to_main_agent": [
+    "Install dependencies: yarn add @phosphor-icons/react recharts",
+    "Configure Tailwind for dark mode by default.",
+    "Implement using .js/.jsx files (no TypeScript!).",
+    "Implement the layout using CSS Grid with exact gap-4 and dense utilization of space (Control Room Grid).",
+    "Use Manrope for headings and JetBrains Mono for body and tabular data.",
+    "Make sure all numbers (prices, percentages) use JetBrains Mono to keep columns aligned.",
+    "Do NOT use glassmorphism. Stick to Tactical Minimalism with 1px solid borders.",
+    "Ensure the AI Trading Agent Status section has a glowing/active aesthetic, using the Volt Blue color and a radar/pulse animation.",
+    "Do NOT use placeholder text for logos; always use the provided image URLs.",
+    "Apply test ids consistently: data-testid='kebab-case-name'."
+  ]
+}
