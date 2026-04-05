@@ -7,8 +7,9 @@ import os
 import asyncio
 import random
 import json
+import httpx
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request
@@ -85,6 +86,22 @@ class CheckoutRequest(BaseModel):
 
 class CheckoutStatusRequest(BaseModel):
     session_id: str
+
+class LLMProviderConfig(BaseModel):
+    name: str
+    provider_type: Literal["openai", "anthropic", "openai_compatible", "custom"]
+    model: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    enabled: bool = True
+    system_prompt: Optional[str] = None
+    extra_headers: Dict[str, str] = Field(default_factory=dict)
+
+class LLMQueryRequest(BaseModel):
+    prompt: str = Field(min_length=1)
+    providers: List[LLMProviderConfig]
+    max_tokens: int = 700
+    temperature: float = 0.2
 
 # ═══════════════════════════════════════════════════════════════════
 # AUTH HELPERS
@@ -268,6 +285,124 @@ class ConnectionManager:
             await asyncio.sleep(2)
 
 manager = ConnectionManager()
+
+# ═══════════════════════════════════════════════════════════════════
+# LLM ORCHESTRATION
+# ═══════════════════════════════════════════════════════════════════
+
+def _estimate_quality(prompt: str, answer: str) -> float:
+    if not answer:
+        return 0.0
+
+    prompt_terms = {w.lower() for w in prompt.split() if len(w) > 2}
+    answer_terms = {w.lower() for w in answer.split() if len(w) > 2}
+    overlap = len(prompt_terms & answer_terms)
+    overlap_score = min(40, overlap * 4)
+    length_score = min(45, len(answer) / 30)
+    structure_bonus = 15 if "\n" in answer or "." in answer else 0
+    return round(overlap_score + length_score + structure_bonus, 2)
+
+
+async def _query_provider(provider: LLMProviderConfig, prompt: str, max_tokens: int, temperature: float) -> dict:
+    if not provider.enabled:
+        return {"provider": provider.name, "status": "skipped", "reason": "disabled"}
+
+    if not provider.api_key:
+        return {
+            "provider": provider.name,
+            "status": "error",
+            "error": "Missing API key. Add a key in the dashboard to query this provider."
+        }
+
+    request_headers = dict(provider.extra_headers or {})
+    provider_type = provider.provider_type
+    timeout = httpx.Timeout(35.0, connect=8.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if provider_type in {"openai", "openai_compatible"}:
+                base_url = provider.base_url or "https://api.openai.com/v1"
+                url = f"{base_url.rstrip('/')}/chat/completions"
+                request_headers["Authorization"] = f"Bearer {provider.api_key}"
+                request_headers["Content-Type"] = "application/json"
+                messages = []
+                if provider.system_prompt:
+                    messages.append({"role": "system", "content": provider.system_prompt})
+                messages.append({"role": "user", "content": prompt})
+
+                payload = {
+                    "model": provider.model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens
+                }
+                response = await client.post(url, headers=request_headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                answer = data["choices"][0]["message"]["content"].strip()
+
+            elif provider_type == "anthropic":
+                base_url = provider.base_url or "https://api.anthropic.com/v1/messages"
+                request_headers["x-api-key"] = provider.api_key
+                request_headers["anthropic-version"] = "2023-06-01"
+                request_headers["content-type"] = "application/json"
+
+                payload = {
+                    "model": provider.model,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+                if provider.system_prompt:
+                    payload["system"] = provider.system_prompt
+
+                response = await client.post(base_url, headers=request_headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                text_blocks = [block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"]
+                answer = "\n".join([t for t in text_blocks if t]).strip()
+
+            else:  # custom provider
+                if not provider.base_url:
+                    raise HTTPException(status_code=400, detail=f"{provider.name}: base_url is required for custom providers")
+                request_headers["Authorization"] = f"Bearer {provider.api_key}"
+                request_headers["Content-Type"] = "application/json"
+                payload = {
+                    "model": provider.model,
+                    "prompt": prompt,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens
+                }
+                response = await client.post(provider.base_url, headers=request_headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                answer = data.get("text") or data.get("output") or data.get("response") or ""
+
+            score = _estimate_quality(prompt, answer)
+            return {
+                "provider": provider.name,
+                "provider_type": provider.provider_type,
+                "model": provider.model,
+                "status": "ok",
+                "score": score,
+                "response": answer
+            }
+    except httpx.HTTPStatusError as exc:
+        return {
+            "provider": provider.name,
+            "provider_type": provider.provider_type,
+            "model": provider.model,
+            "status": "error",
+            "error": f"HTTP {exc.response.status_code}: {exc.response.text[:240]}"
+        }
+    except Exception as exc:
+        return {
+            "provider": provider.name,
+            "provider_type": provider.provider_type,
+            "model": provider.model,
+            "status": "error",
+            "error": str(exc)
+        }
 
 # ═══════════════════════════════════════════════════════════════════
 # STRIPE INTEGRATION
@@ -518,6 +653,41 @@ async def place_trade(trade: TradeRequest, current_user: dict = Depends(get_curr
 async def get_trade_history(current_user: dict = Depends(get_current_user)):
     trades = list(trades_collection.find({"user_id": current_user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50))
     return trades
+
+# ═══════════════════════════════════════════════════════════════════
+# ROUTES: LLM AGGREGATOR
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/api/llm/query")
+async def query_multiple_llms(request: LLMQueryRequest, current_user: dict = Depends(get_current_user)):
+    if not request.providers:
+        raise HTTPException(status_code=400, detail="At least one provider must be configured")
+
+    active_providers = [p for p in request.providers if p.enabled]
+    if not active_providers:
+        raise HTTPException(status_code=400, detail="Enable at least one provider")
+
+    tasks = [
+        _query_provider(
+            provider=provider,
+            prompt=request.prompt,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature
+        )
+        for provider in active_providers
+    ]
+    results = await asyncio.gather(*tasks)
+    successful = [r for r in results if r.get("status") == "ok" and r.get("response")]
+    best_result = max(successful, key=lambda r: r.get("score", 0), default=None)
+
+    return {
+        "prompt": request.prompt,
+        "total_providers": len(active_providers),
+        "successful_providers": len(successful),
+        "best_result": best_result,
+        "results": sorted(results, key=lambda r: r.get("score", 0), reverse=True),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # ═══════════════════════════════════════════════════════════════════
 # ROUTES: PAYMENTS (STRIPE)
