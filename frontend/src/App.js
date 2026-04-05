@@ -219,6 +219,182 @@ function TopBar({ user, onLogout }) {
   );
 }
 
+function LLMOrchestratorPanel() {
+  const [providers, setProviders] = useState([
+    {
+      id: 'chatgpt5',
+      name: 'ChatGPT 5',
+      provider_type: 'openai',
+      model: 'gpt-5',
+      base_url: 'https://api.openai.com/v1',
+      api_key: '',
+      enabled: true
+    },
+    {
+      id: 'claude',
+      name: 'Claude',
+      provider_type: 'anthropic',
+      model: 'claude-3-7-sonnet-latest',
+      base_url: 'https://api.anthropic.com/v1/messages',
+      api_key: '',
+      enabled: true
+    },
+    {
+      id: 'open-source',
+      name: 'Open Source API',
+      provider_type: 'openai_compatible',
+      model: 'meta-llama/llama-3.3-70b-instruct',
+      base_url: 'https://openrouter.ai/api/v1',
+      api_key: '',
+      enabled: true
+    }
+  ]);
+  const [prompt, setPrompt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [queryResult, setQueryResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const updateProvider = (providerId, field, value) => {
+    setProviders((prev) =>
+      prev.map((p) => (p.id === providerId ? { ...p, [field]: value } : p))
+    );
+  };
+
+  const runSearch = async () => {
+    if (!prompt.trim()) {
+      setError('Please enter a command or question first.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+    try {
+      const payload = {
+        prompt,
+        providers: providers.map((p) => ({
+          name: p.name,
+          provider_type: p.provider_type,
+          model: p.model,
+          base_url: p.base_url,
+          api_key: p.api_key,
+          enabled: p.enabled
+        }))
+      };
+      const response = await api.post('/api/llm/query', payload);
+      setQueryResult(response.data);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to query providers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-4">
+        <h2 className="font-heading text-xl font-bold mb-2">Multi-LLM Command Dashboard</h2>
+        <p className="text-sm text-white/60 mb-4">
+          Connect ChatGPT, Claude, and open-source APIs. Submit one command and compare answers from all enabled providers.
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {providers.map((provider) => (
+            <div key={provider.id} className="p-3 rounded bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold">{provider.name}</div>
+                <label className="text-xs flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={provider.enabled}
+                    onChange={(e) => updateProvider(provider.id, 'enabled', e.target.checked)}
+                  />
+                  Enabled
+                </label>
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={provider.model}
+                  onChange={(e) => updateProvider(provider.id, 'model', e.target.value)}
+                  placeholder="Model"
+                  className="w-full"
+                />
+                <input
+                  type="text"
+                  value={provider.base_url}
+                  onChange={(e) => updateProvider(provider.id, 'base_url', e.target.value)}
+                  placeholder="Base URL"
+                  className="w-full"
+                />
+                <input
+                  type="password"
+                  value={provider.api_key}
+                  onChange={(e) => updateProvider(provider.id, 'api_key', e.target.value)}
+                  placeholder="API key"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <label className="block text-xs uppercase tracking-wider text-white/60 mb-2">Command / Prompt</label>
+        <textarea
+          className="w-full min-h-[140px]"
+          placeholder="Example: Compare the latest security best practices for deploying local LLM agents."
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+        />
+        {error && <div className="mt-3 text-sm text-negative">{error}</div>}
+        <button
+          onClick={runSearch}
+          disabled={loading}
+          className="btn-primary rounded mt-3 font-bold disabled:opacity-50"
+          data-testid="llm-search-btn"
+        >
+          {loading ? 'Querying providers...' : 'Search all platforms'}
+        </button>
+      </div>
+
+      {queryResult && (
+        <>
+          <div className="card p-4 border border-primary/50">
+            <div className="text-xs uppercase tracking-wider text-white/60 mb-2">Best Result</div>
+            {queryResult.best_result ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-bold">{queryResult.best_result.provider}</div>
+                  <div className="text-xs text-primary">Score {queryResult.best_result.score}</div>
+                </div>
+                <div className="text-sm whitespace-pre-wrap">{queryResult.best_result.response}</div>
+              </>
+            ) : (
+              <div className="text-sm text-white/60">No successful response. Check API keys and model names.</div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {queryResult.results.map((result, idx) => (
+              <div key={idx} className="card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-bold">{result.provider}</div>
+                  <div className="text-xs text-white/60">{result.model || result.status}</div>
+                </div>
+                {result.status === 'ok' ? (
+                  <div className="text-sm whitespace-pre-wrap">{result.response}</div>
+                ) : (
+                  <div className="text-sm text-negative">{result.error || result.reason}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PriceTicker({ prices, selectedSymbol, onSelect }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-2">
@@ -725,6 +901,7 @@ function PaymentCancel() {
 // ═══════════════════════════════════════════════════════════════════
 
 function Dashboard({ user, onLogout, onUpdateUser }) {
+  const [activeView, setActiveView] = useState('trading');
   const [prices, setPrices] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
   const [chartData, setChartData] = useState([]);
@@ -836,6 +1013,26 @@ function Dashboard({ user, onLogout, onUpdateUser }) {
       <TopBar user={user} onLogout={onLogout} />
       
       <main className="p-4">
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveView('trading')}
+            className={`px-4 py-2 rounded font-bold text-sm ${activeView === 'trading' ? 'btn-primary' : 'bg-white/5'}`}
+          >
+            <ChartLine size={16} className="inline mr-2" />
+            Trading
+          </button>
+          <button
+            onClick={() => setActiveView('llm')}
+            className={`px-4 py-2 rounded font-bold text-sm ${activeView === 'llm' ? 'btn-primary' : 'bg-white/5'}`}
+          >
+            <Gear size={16} className="inline mr-2" />
+            LLM Dashboard
+          </button>
+        </div>
+        {activeView === 'llm' ? (
+          <LLMOrchestratorPanel />
+        ) : (
+          <>
         <PriceTicker prices={prices} selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} />
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-4">
@@ -861,6 +1058,8 @@ function Dashboard({ user, onLogout, onUpdateUser }) {
             <CreditsPanel user={user} onBuyCredits={handleBuyCredits} />
           </div>
         </div>
+          </>
+        )}
       </main>
     </div>
   );
